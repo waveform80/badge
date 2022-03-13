@@ -10,7 +10,6 @@ all: firmware.uf2
 
 clean:
 	cd "$(MP_PATH)" && git clean -xfd
-	cd "$(PICO_SDK_PATH)" && git clean -xfd
 	cd "$(PIMORONI_PICO_PATH)" && git clean -xfd
 
 $(MP_PATH):
@@ -28,9 +27,9 @@ $(MP_PATH)/mpy-cross/mpy-cross: $(MP_PATH)
 	cd "$(MP_PATH)"/mpy-cross && make
 
 $(MP_PATH)/ports/rp2/boards/PICO/mpconfigboard.h: \
-	$(MP_PATH)/ports/rp2 \
-	$(PIMORONI_PICO_PATH)/micropython/badger2040-mpconfigboard.h
-	cp "$@" "$<"
+	$(PIMORONI_PICO_PATH)/micropython/badger2040-mpconfigboard.h \
+	$(MP_PATH)/ports/rp2
+	cp "$<" "$@"
 
 $(MP_PATH)/ports/rp2: $(MP_PATH)
 
@@ -42,14 +41,14 @@ $(MP_PATH)/ports/rp2/build-PICO: \
 	$(MP_PATH)/mpy-cross/mpy-cross \
 	$(MP_PATH)/ports/rp2/boards/PICO/mpconfigboard.h \
 	$(PIMORONI_PICO_PATH)/micropython/modules/micropython.cmake
-	cmake -S "$(MP_PATH)"/ports/rp2 -B "$@" \
+	cd "$(abspath $(MP_PATH)/ports/rp2)" && cmake -S . -B "$(abspath $@)" \
 		-DPICO_BUILD_DOCS=0 \
-		-DUSER_C_MODULES="$(PIMORONI_PICO_PATH)"/micropython/modules/micropython.cmake \
+		-DUSER_C_MODULES="$(abspath $(PIMORONI_PICO_PATH)/micropython/modules/micropython.cmake)" \
 		-DMICROPY_BOARD=PICO
 
 firmware.uf2: \
 	main.py \
 	$(MP_PATH)/mpy-cross/mpy-cross \
 	$(MP_PATH)/ports/rp2/build-PICO
-	cmake -S "$(MP_PATH)/ports/rp2 --build build-PICO -j2
+	cd "$(abspath $(MP_PATH)/ports/rp2)" && cmake --build build-PICO -j2
 	cp "$(MP_PATH)"/ports/rp2/build-PICO/firmware.uf2 "$@"
