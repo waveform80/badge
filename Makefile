@@ -43,7 +43,7 @@ $(MP_PATH)/ports/rp2/build-PICO: \
 	$(PIMORONI_PICO_PATH)/micropython/modules/micropython.cmake
 	cd "$(abspath $(MP_PATH)/ports/rp2)" && cmake -S . -B "$(abspath $@)" \
 		-DPICO_BUILD_DOCS=0 \
-		-DUSER_C_MODULES="$(abspath $(PIMORONI_PICO_PATH)/micropython/modules/micropython.cmake)" \
+		-DUSER_C_MODULES="$(abspath $(PIMORONI_PICO_PATH)/micropython/modules/badger2040-micropython.cmake)" \
 		-DMICROPY_BOARD=PICO
 
 firmware.uf2: \
