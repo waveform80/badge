@@ -1,97 +1,12 @@
 import time
 import machine
 import badger2040
-from array import array
 from qrcode import QRCode
-from micropython import schedule
 from vcard import VCard
 
 
 def scale(input, in_min, in_max, out_min, out_max):
     return (((input - in_min) * (out_max - out_min)) / (in_max - in_min)) + out_min
-
-
-class BadgeButtons:
-    BUTTONS = {
-        badger2040.BUTTON_A,
-        badger2040.BUTTON_B,
-        badger2040.BUTTON_C,
-        badger2040.BUTTON_UP,
-        badger2040.BUTTON_DOWN,
-    }
-
-    def __init__(self, bounce_ms=250, queue_len=8):
-        buttons = [
-            (pin, machine.Pin(pin, machine.Pin.IN, machine.Pin.PULL_DOWN))
-            for pin in self.BUTTONS
-        ]
-        last_ticks = {}
-        queue = array('I', [0] * (queue_len * 2))
-        queue_pos = 0
-        self._handlers = {}
-
-        # Closure to work around the inability to call a bound method from an
-        # interrupt handler. This is also the reason we're using a
-        # pre-allocated array as a rudimentary queue. The interrupt handler
-        # here just pushes the time and pin of the button pressed to the
-        # "queue" and schedules another callback to deal with it later
-        def pressed(btn):
-            nonlocal queue_pos
-            t = time.ticks_ms()
-            for pin, obj in buttons:
-                if obj is btn:
-                    if queue_pos < len(queue):
-                        queue[queue_pos] = t
-                        queue[queue_pos + 1] = pin
-                        queue_pos += 2
-                        schedule(dispatch, None)
-                    break
-
-        # The actual dispatcher. Another closure, but this one is only called
-        # from the main "thread". Handles popping times and pins off the
-        # "queue" and executing the associated handler if the last call-time
-        # was within the bounce timeout
-        def dispatch(arg):
-            nonlocal queue_pos
-            while True:
-                # Disable interrupts while we mess with the queue pointer
-                state = machine.disable_irq()
-                try:
-                    if not queue_pos:
-                        break
-                    ticks = queue[0]
-                    pin = queue[1]
-                    queue[:-2] = queue[2:]
-                    queue_pos -= 2
-                finally:
-                    machine.enable_irq(state)
-                try:
-                    last = last_ticks[pin]
-                except KeyError:
-                    pass
-                else:
-                    diff = time.ticks_diff(ticks, last)
-                    if diff < bounce_ms:
-                        continue
-                last_ticks[pin] = ticks
-                try:
-                    handler = self._handlers[pin]
-                except KeyError:
-                    pass
-                else:
-                    handler()
-
-        for pin, btn in buttons:
-            btn.irq(pressed, machine.Pin.IRQ_RISING, hard=True)
-
-    def __getitem__(self, key):
-        return self._handlers[key]
-
-    def __setitem__(self, key, value):
-        self._handlers[key] = value
-
-    def __delitem__(self, key):
-        del self._handlers[key]
 
 
 class Badge:
@@ -104,7 +19,20 @@ class Badge:
         self.vref_adc = machine.ADC(badger2040.PIN_1V2_REF)
         self.vref_en = machine.Pin(badger2040.PIN_VREF_POWER, machine.Pin.OUT,
                                    value=0)
-        self.handlers = BadgeButtons()
+        # Read the state of all buttons into a "pressed" set. This is a
+        # one-shot programme so we expect one or more buttons woke us up. We'll
+        # update the display in response then halt
+        self.pressed = {
+            pin
+            for pin in (
+                badger2040.BUTTON_A,
+                badger2040.BUTTON_B,
+                badger2040.BUTTON_C,
+                badger2040.BUTTON_UP,
+                badger2040.BUTTON_DOWN,
+            )
+            if machine.Pin(pin, machine.Pin.IN, machine.Pin.PULL_DOWN).value()
+        }
         self._screen = badger2040.Badger2040()
         self._screen.update_speed(badger2040.UPDATE_FAST)
 
@@ -120,6 +48,11 @@ class Badge:
         finally:
             self.vref_en.value(0)
 
+    @property
+    def battery_level(self):
+        return scale(
+            self.battery_v, self.BATTERY_MIN_V, self.BATTERY_MAX_V, 0, 4)
+
     def clean(self):
         self._screen.update_speed(badger2040.UPDATE_MEDIUM)
         self.clear()
@@ -132,6 +65,15 @@ class Badge:
 
     def update(self):
         self._screen.update()
+
+    def halt(self):
+        # On battery this switches off power; we light the LED to "prove" we've
+        # actually halted. On USB this will continue to the infinite loop with
+        # the LED lit
+        self._screen.halt()
+        self._screen.led(255)
+        while True:
+            self._screen.halt()
 
     def draw_error(self, msg):
         self._screen.font('sans')
@@ -201,95 +143,76 @@ class Badge:
 
     def draw_battery(self, x, y, level=None):
         if level is None:
-            level = scale(
-                self.battery_v, self.BATTERY_MIN_V, self.BATTERY_MAX_V, 0, 4)
+            level = self.battery_level
         # Outline
         self._screen.thickness(1)
-        self._screen.pen(15)
+        self._screen.pen(0)
         self._screen.rectangle(x, y, 19, 10)
         # Terminal
         self._screen.rectangle(x + 19, y + 3, 2, 4)
-        self._screen.pen(0)
+        self._screen.pen(15)
         self._screen.rectangle(x + 1, y + 1, 17, 8)
         if level < 1:
-            self._screen.pen(0)
+            self._screen.pen(15)
             self._screen.line(x + 3, y, x + 3 + 10, y + 10)
             self._screen.line(x + 3 + 1, y, x + 3 + 11, y + 10)
-            self._screen.pen(15)
+            self._screen.pen(0)
             self._screen.line(x + 2 + 2, y - 1, x + 4 + 12, y + 11)
             self._screen.line(x + 2 + 3, y - 1, x + 4 + 13, y + 11)
             return
         # Battery Bars
-        self._screen.pen(15)
+        self._screen.pen(0)
         for i in range(4):
             if level / 4 > (1.0 * i) / 4:
                 self._screen.rectangle(i * 4 + x + 2, y + 2, 3, 6)
 
 
-def main():
-    cards = [
-        VCard(
-            given_names='Dave',
-            family_names='Jones',
-            nickname='waveform',
-            org=['Canonical', 'Foundations'],
-            email='dave.jones@canonical.com',
-            url='https://waldorf.waveform.org.uk/',
-            image='canonical'),
-        VCard(
-            given_names='Dave',
-            family_names='Jones',
-            nickname='waveform',
-            org=['Canonical', 'Foundations'],
-            email='waveform@ubuntu.com',
-            url='https://waldorf.waveform.org.uk/',
-            image='ubuntu'),
-        VCard(
-            given_names='Dave',
-            family_names='Jones',
-            nickname='waveform',
-            email='dave@waveform.org.uk',
-            url='https://github.com/waveform80/',
-            image='face'),
-    ]
-    card = 0
-    show_qr = False
-    badge = Badge()
-
-    def refresh():
-        badge.clear()
-        if show_qr:
-            badge.draw_qrcode(cards[card])
-        else:
-            badge.draw_card(cards[card])
-        badge.update()
-
-    def prior_card():
-        nonlocal card, show_qr
-        show_qr = False
-        card = (card - 1) % len(cards)
-        refresh()
-
-    def next_card():
-        nonlocal card, show_qr
-        show_qr = False
-        card = (card + 1) % len(cards)
-        refresh()
-
-    def toggle_qr():
-        nonlocal show_qr
-        show_qr = not show_qr
-        refresh()
-
-    def clean():
-        badge.clean()
-        refresh()
-
-    badge.handlers[badger2040.BUTTON_UP] = prior_card
-    badge.handlers[badger2040.BUTTON_DOWN] = next_card
-    badge.handlers[badger2040.BUTTON_B] = toggle_qr
-    badge.handlers[badger2040.BUTTON_C] = clean
-    refresh()
-
-
-main()
+cards = {
+    badger2040.BUTTON_A: VCard(
+        given_names='Dave',
+        family_names='Jones',
+        nickname='waveform',
+        email='dave@waveform.org.uk',
+        url='https://github.com/waveform80/',
+        image='face'),
+    badger2040.BUTTON_C: VCard(
+        given_names='Dave',
+        family_names='Jones',
+        nickname='waveform',
+        org=['Canonical', 'Foundations'],
+        email='dave.jones@canonical.com',
+        url='https://waldorf.waveform.org.uk/',
+        image='canonical'),
+    #badger2040.BUTTON_B: VCard(
+    #    given_names='Dave',
+    #    family_names='Jones',
+    #    nickname='waveform',
+    #    org=['Canonical', 'Foundations'],
+    #    email='waveform@ubuntu.com',
+    #    url='https://waldorf.waveform.org.uk/',
+    #    image='ubuntu'),
+}
+print('Starting up')
+badge = Badge()
+try:
+    show_qr = badger2040.BUTTON_B in badge.pressed
+    identity = set(cards) & (badge.pressed - {badger2040.BUTTON_B})
+    if len(identity) > 1:
+        raise RuntimeError('More than one identity selected!')
+    elif len(identity) == 0:
+        raise RuntimeError('No identity selected!')
+    identity = identity.pop()
+    badge.clear()
+    if show_qr:
+        print(f'Showing QR code for {cards[identity].email}')
+        badge.draw_qrcode(cards[identity])
+    else:
+        print(f'Showing badge for {cards[identity].email}')
+        badge.draw_card(cards[identity])
+    level = badge.battery_level
+    if level < 3:
+        badge.draw_battery(275, 1, level=level)
+    badge.update()
+finally:
+    time.sleep(2)
+    badge.halt()

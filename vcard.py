@@ -33,7 +33,7 @@ class VCard:
             self.image = None
         else:
             fn, w, h = self.IMAGES[image]
-            with open(f'/images/{fn}', 'rb') as f:
+            with open(f'{fn}', 'rb') as f:
                 self.image = (bytearray(f.read()), w, h)
 
     def __repr__(self):
@@ -88,6 +88,6 @@ class VCard:
         return f"""\
 BEGIN:VCARD
 VERSION:4.0
-{fields}
+{lines}
 END:VCARD
 """
