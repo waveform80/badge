@@ -175,6 +175,14 @@ cards = {
         email='dave@waveform.org.uk',
         url='https://github.com/waveform80/',
         image='face'),
+    badger2040.BUTTON_B: VCard(
+        given_names='Dave',
+        family_names='Jones',
+        nickname='waveform',
+        org=['Canonical', 'Foundations'],
+        email='waveform@ubuntu.com',
+        url='https://waldorf.waveform.org.uk/',
+        image='ubuntu'),
     badger2040.BUTTON_C: VCard(
         given_names='Dave',
         family_names='Jones',
@@ -183,20 +191,13 @@ cards = {
         email='dave.jones@canonical.com',
         url='https://waldorf.waveform.org.uk/',
         image='canonical'),
-    #badger2040.BUTTON_B: VCard(
-    #    given_names='Dave',
-    #    family_names='Jones',
-    #    nickname='waveform',
-    #    org=['Canonical', 'Foundations'],
-    #    email='waveform@ubuntu.com',
-    #    url='https://waldorf.waveform.org.uk/',
-    #    image='ubuntu'),
 }
 print('Starting up')
 badge = Badge()
 try:
-    show_qr = badger2040.BUTTON_B in badge.pressed
-    identity = set(cards) & (badge.pressed - {badger2040.BUTTON_B})
+    show_qr = bool(
+        {badger2040.BUTTON_DOWN, badger2040.BUTTON_UP} & badge.pressed)
+    identity = set(cards) & badge.pressed
     if len(identity) > 1:
         raise RuntimeError('More than one identity selected!')
     elif len(identity) == 0:
@@ -214,5 +215,5 @@ try:
         badge.draw_battery(275, 1, level=level)
     badge.update()
 finally:
-    time.sleep(2)
+    time.sleep(1)
     badge.halt()
