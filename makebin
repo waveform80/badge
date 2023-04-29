@@ -1,0 +1,54 @@
+#!/usr/bin/python3
+
+"""
+A simple script for converting an image (in a format compatible with the Pillow
+imaging library) to a .bin file suitable for use with the Badger2040.
+"""
+
+import sys
+import argparse
+from itertools import cycle
+
+from PIL import Image
+
+
+def convert(image_file, output_file, dither='fs'):
+    img = Image.open(image_file)
+    if img.size != (64, 64):
+        raise ValueError('Image must be 64x64 pixels in size')
+    img = img.convert('1', dither={
+        'none': Image.NONE,
+        'fs': Image.FLOYDSTEINBERG,
+    }[dither])
+    width, height = img.size
+    out = bytearray(width * height // 8)
+    for offset in range(len(out)):
+        for bit in range(8):
+            y = (offset * 8) // width
+            x = (offset * 8 + bit) % width
+            # The shift is reversed here because the output is little-endian
+            out[offset] |= (not bool(img.getpixel((x, y)))) << (7 - bit)
+    output_file.write(out)
+
+
+def main(args=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        'image', type=argparse.FileType('rb'), default=sys.stdin.buffer,
+        help="The image file to convert to a .bin format suitable for use "
+        "with the Badger2040 badge")
+    parser.add_argument(
+        '--output', type=argparse.FileType('wb'), default=sys.stdout.buffer,
+        help="The file to output; defaults to stdout")
+    parser.add_argument(
+        '--dither', choices=('none', 'fs'), default='fs',
+        help="The type of dither performed when converting the image to black "
+        "and white; valid choices are 'none' and 'fs' for Floyd-Steinberg "
+        "dithering (default: %(default)s)")
+    config = parser.parse_args()
+
+    convert(config.image, config.output, config.dither)
+
+
+if __name__ == '__main__':
+    main()

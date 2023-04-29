@@ -1,0 +1,48 @@
+#!/usr/bin/python3
+
+"""
+A simple script for display the content of .bin files via the Pillow imaging
+library. This script expects DISPLAY to be set to a valid X11 output.
+"""
+
+import sys
+import argparse
+
+from PIL import Image
+
+
+def show(image, size):
+    data = image.read()
+    width, height = size
+    if len(data) != width * height // 8:
+        raise ValueError(f"Size of .bin file does not match the specified "
+                         f"size; {len(data)} != {width * height // 8} "
+                         f"({width} x {height} / 8)")
+    img = Image.new('1', size)
+    for y in range(height):
+        for x in range(width):
+            offset = y * 8 + x // 8
+            # bit is reversed because .bin files are little-endian
+            bit = (7 - (x % 8))
+            img.putpixel((x, y), (255, 0)[(data[offset] >> bit) & 0b1])
+    img.show()
+
+
+def main(args=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        'image', type=argparse.FileType('rb'), default=sys.stdin.buffer,
+        help="The .bin file to display")
+    parser.add_argument(
+        '--width', type=int, default=64,
+        help="The assumed width of the image")
+    parser.add_argument(
+        '--height', type=int, default=64,
+        help="The assumed height of the image")
+    config = parser.parse_args()
+
+    show(config.image, (config.width, config.height))
+
+
+if __name__ == '__main__':
+    main()
