@@ -182,7 +182,7 @@ cards = {
         org=['Canonical', 'Foundations'],
         email='waveform@ubuntu.com',
         url='https://waldorf.waveform.org.uk/',
-        image='ubuntu'),
+        image='new-ubuntu'),
     badger2040.BUTTON_C: VCard(
         given_names='Dave',
         family_names='Jones',

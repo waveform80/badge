@@ -1,8 +1,9 @@
 class VCard:
     IMAGES = {
-        'ubuntu':    ('ubuntu.bin',    64, 64),
-        'canonical': ('canonical.bin', 64, 64),
-        'face':      ('face.bin',      64, 64),
+        'new-ubuntu': ('new-ubuntu.bin', 64, 64),
+        'ubuntu':     ('ubuntu.bin',     64, 64),
+        'canonical':  ('canonical.bin',  64, 64),
+        'face':       ('face.bin',       64, 64),
     }
 
     def __init__(self, *, given_names, family_names, middle_names=None,
