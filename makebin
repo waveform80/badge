@@ -14,13 +14,13 @@ from PIL import Image
 
 def convert(image_file, output_file, dither='fs'):
     img = Image.open(image_file)
-    if img.size != (64, 64):
-        raise ValueError('Image must be 64x64 pixels in size')
+    width, height = img.size
+    if width % 8:
+        raise ValueError('Image width must be a multiple of 8')
     img = img.convert('1', dither={
         'none': Image.NONE,
         'fs': Image.FLOYDSTEINBERG,
     }[dither])
-    width, height = img.size
     out = bytearray(width * height // 8)
     for offset in range(len(out)):
         for bit in range(8):

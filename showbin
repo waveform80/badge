@@ -19,12 +19,12 @@ def show(image, size):
                          f"size; {len(data)} != {width * height // 8} "
                          f"({width} x {height} / 8)")
     img = Image.new('1', size)
-    for y in range(height):
-        for x in range(width):
-            offset = y * 8 + x // 8
-            # bit is reversed because .bin files are little-endian
-            bit = (7 - (x % 8))
-            img.putpixel((x, y), (255, 0)[(data[offset] >> bit) & 0b1])
+    for offset, byte in enumerate(data):
+        for bit in range(8):
+            y = (offset * 8) // width
+            x = (offset * 8 + bit) % width
+            # The shift is reversed here because the output is little-endian
+            img.putpixel((x, y), (255, 0)[(data[offset] >> (7 - bit)) & 0b1])
     img.show()
 
 
