@@ -40,7 +40,7 @@ class Badge:
     def battery_v(self):
         self.vref_en.value(1)
         try:
-            # Calculate the logic supply voltage, as will be lower that the
+            # Calculate the logic supply voltage, as will be lower than the
             # usual 3.3V when running off low batteries
             vdd = 1.24 * (65535 / self.vref_adc.read_u16())
             # 3 in this is a gain, not rounding of 3.3V
@@ -211,7 +211,7 @@ try:
         print(f'Showing badge for {cards[identity].email}')
         badge.draw_card(cards[identity])
     level = badge.battery_level
-    if level < 3:
+    if show_qr or level < 3:
         badge.draw_battery(275, 1, level=level)
     badge.update()
 finally:
