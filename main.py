@@ -190,7 +190,7 @@ cards = {
         org=['Canonical', 'Foundations'],
         email='dave.jones@canonical.com',
         url='https://waldorf.waveform.org.uk/',
-        image='canonical'),
+        image='summit'),
 }
 print('Starting up')
 badge = Badge()

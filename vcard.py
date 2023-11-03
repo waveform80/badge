@@ -2,6 +2,7 @@ class VCard:
     IMAGES = {
         'new-ubuntu': ('new-ubuntu.bin', 48, 64),
         'ubuntu':     ('ubuntu.bin',     64, 64),
+        'summit':     ('summit.bin',     64, 64),
         'canonical':  ('canonical.bin',  64, 64),
         'face':       ('face.bin',       64, 64),
     }
