@@ -10,15 +10,19 @@ def scale(input, in_min, in_max, out_min, out_max):
 
 
 class Badge:
+    PIN_VREF_POWER = 27
+    PIN_1V2_REF = 28
+    PIN_BATTERY = 29
+    PIN_ENABLE_3V3 = 10
+
     BATTERY_MIN_V = 3.2
     BATTERY_MAX_V = 4.0
     FONT_HEIGHT = 28
 
     def __init__(self):
-        self.vbat_adc = machine.ADC(badger2040.PIN_BATTERY)
-        self.vref_adc = machine.ADC(badger2040.PIN_1V2_REF)
-        self.vref_en = machine.Pin(badger2040.PIN_VREF_POWER, machine.Pin.OUT,
-                                   value=0)
+        self.vbat_adc = machine.ADC(self.PIN_BATTERY)
+        self.vref_adc = machine.ADC(self.PIN_1V2_REF)
+        self.vref_en = machine.Pin(self.PIN_VREF_POWER, machine.Pin.OUT, value=0)
         # Read the state of all buttons into a "pressed" set. This is a
         # one-shot programme so we expect one or more buttons woke us up. We'll
         # update the display in response then halt
@@ -34,7 +38,7 @@ class Badge:
             if machine.Pin(pin, machine.Pin.IN, machine.Pin.PULL_DOWN).value()
         }
         self._screen = badger2040.Badger2040()
-        self._screen.update_speed(badger2040.UPDATE_FAST)
+        self._screen.set_update_speed(badger2040.UPDATE_FAST)
 
     @property
     def battery_v(self):
@@ -60,8 +64,8 @@ class Badge:
         self._screen.update_speed(badger2040.UPDATE_FAST)
 
     def clear(self):
-        blank = bytearray(b'\x00' * (badger2040.WIDTH * badger2040.HEIGHT // 8))
-        self._screen.image(blank)
+        self._screen.set_pen(15)
+        self._screen.clear()
 
     def update(self):
         self._screen.update()
@@ -76,10 +80,10 @@ class Badge:
             self._screen.halt()
 
     def draw_error(self, msg):
-        self._screen.font('sans')
-        self._screen.pen(0)
-        self._screen.thickness(2)
-        self._screen.text(msg, 0, 0, 0.5)
+        self._screen.set_font('sans')
+        self._screen.set_pen(0)
+        self._screen.set_thickness(2)
+        self._screen.text(msg, 0, 0, badger2040.WIDTH, 0.5)
 
     def draw_qrcode(self, card):
         code = QRCode()
@@ -100,18 +104,28 @@ class Badge:
             for y in range(h)
             for x in range(0, w, 8)
         )
-        self._screen.image(buf, w, h, x, y)
+        self._screen.set_pen(0)
+        self.draw_image(buf, w, h, x, y)
+
+    def draw_image(self, data, w, h, x, y):
+        sw = w // 8
+        for dy in range(h):
+            for dx in range(w):
+                offset = dy * sw + (dx >> 3)
+                bm = 0b10000000 >> (dx & 0b111)
+                if data[offset] & bm:
+                    self._screen.pixel(x + dx, y + dy)
 
     def draw_card(self, card):
         lines = [
             # (pen-weight, size, text)
             (3, 1.0, f'{card.given_names[0]} {card.family_names[0]}'),
-            (1, 0.8, f'"{card.nickname}"'),
+            (2, 0.8, f'"{card.nickname}"'),
             (2, 0.8, f'{card.org[-1] if card.org else ""}'),
             (1, 0.5, card.email),
         ]
-        self._screen.font('sans')
-        self._screen.pen(0)
+        self._screen.set_font('sans')
+        self._screen.set_pen(0)
         if card.image:
             buf, w, h = card.image
             card_width = w + 4
@@ -131,37 +145,37 @@ class Badge:
         y = (badger2040.HEIGHT - card_height) // 2
         if card.image:
             buf, w, h = card.image
-            self._screen.image(buf, w, h, x, y)
+            self.draw_image(buf, w, h, x, y)
             x += w + 4
         for weight, size, text in lines:
             if text:
                 h = int(self.FONT_HEIGHT * size) // 2
                 y += h
-                self._screen.thickness(weight)
-                self._screen.text(text, x, y, size)
+                self._screen.set_thickness(weight)
+                self._screen.text(text, x, y, badger2040.WIDTH - x, size)
                 y += int(self.FONT_HEIGHT * size) - h
 
     def draw_battery(self, x, y, level=None):
         if level is None:
             level = self.battery_level
         # Outline
-        self._screen.thickness(1)
-        self._screen.pen(0)
+        self._screen.set_thickness(1)
+        self._screen.set_pen(0)
         self._screen.rectangle(x, y, 19, 10)
         # Terminal
         self._screen.rectangle(x + 19, y + 3, 2, 4)
-        self._screen.pen(15)
+        self._screen.set_pen(15)
         self._screen.rectangle(x + 1, y + 1, 17, 8)
         if level < 1:
-            self._screen.pen(15)
+            self._screen.set_pen(15)
             self._screen.line(x + 3, y, x + 3 + 10, y + 10)
             self._screen.line(x + 3 + 1, y, x + 3 + 11, y + 10)
-            self._screen.pen(0)
+            self._screen.set_pen(0)
             self._screen.line(x + 2 + 2, y - 1, x + 4 + 12, y + 11)
             self._screen.line(x + 2 + 3, y - 1, x + 4 + 13, y + 11)
             return
         # Battery Bars
-        self._screen.pen(0)
+        self._screen.set_pen(0)
         for i in range(4):
             if level / 4 > (1.0 * i) / 4:
                 self._screen.rectangle(i * 4 + x + 2, y + 2, 3, 6)
